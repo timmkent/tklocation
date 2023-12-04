@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TKLocation {
@@ -14,5 +15,7 @@ class TKLocation {
   static initialize({required String appShort, required String uid}) async {
     final shared = await SharedPreferences.getInstance();
     print("TKLocation initialized!");
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    print("Current User:$uid");
   }
 }
