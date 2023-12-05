@@ -51,6 +51,18 @@ class TKLocation {
 // TODO: Write data to user profile.
 // TODO: Send some message to potential observers that want to reload
 
+  static Future<Position?> getUserLocation() async {
+    const timeLimit = Duration(seconds: 7);
+    const desiredAccuracy = LocationAccuracy.medium;
+    try {
+      return await Geolocator.getCurrentPosition(desiredAccuracy: desiredAccuracy, timeLimit: timeLimit);
+    } catch (e) {
+      print("Location aquisition error");
+      print(e);
+      return null;
+    }
+  }
+
   static startLocationObservation() {
     // TODO: Make sure you dont start this more than once!
     print("TKLocation: starting Userlocation Observation");
