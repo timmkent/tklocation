@@ -1,7 +1,15 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:tklocation/src/counter.dart';
+
+// Use Case 1:
+
+// Location Service is enabled
+// Permissions are granted
+// Network and GPS is avaibale
 
 class TKLocation {
   static final TKLocation _singleton = TKLocation._internal();
@@ -11,12 +19,13 @@ class TKLocation {
   }
   SharedPreferences? shared;
   bool? _serviceEnabled;
-  // Wenn wir eine location bekommen koennen, sollten wir diese erstmal speichern, den Ort holen und
-  // alles im UserObject orderntlich registrieren.
 
-  static initialize({required String appShort, required String uid}) async {
+  static initialize({required String appShort}) async {
     final shared = await SharedPreferences.getInstance();
     print("TKLocation initialized!");
+    // nur beim restart haben wir eine UID, sonst nicht. Wir muessen diese also immer wieder erneut pruefen.
+
+    // Zum testen erstaml rausnehmen
     final uid = FirebaseAuth.instance.currentUser?.uid;
     print("Current User:$uid");
 
@@ -24,8 +33,57 @@ class TKLocation {
     final GeolocatorPlatform _geolocatorPlatform = GeolocatorPlatform.instance;
     _singleton._serviceEnabled = await _geolocatorPlatform.isLocationServiceEnabled();
     Counter.increaseCounterOnce(CounterName.location_service_enabled, appShort);
+
+    final permissions = await _geolocatorPlatform.checkPermission();
+
+    if (permissions == LocationPermission.denied) {
+      // User has not yet granted permissions.
+    }
 //   _determinePosition()
 // COUNTER: location_aquired
+  }
+
+  Timer? timer;
+  bool timerIsRunning = false;
+  Position? position;
+// TODO: Get last known position from my own user profile
+// TODO: Get City
+// TODO: Write data to user profile.
+// TODO: Send some message to potential observers that want to reload
+
+  static startLocationObservation() {
+    // TODO: Make sure you dont start this more than once!
+    print("TKLocation: starting Userlocation Observation");
+    _singleton.timer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      print("TKLocation: getting user location");
+      const timeLimit = Duration(seconds: 7);
+      const desiredAccuracy = LocationAccuracy.medium;
+      try {
+        final position = await Geolocator.getCurrentPosition(desiredAccuracy: desiredAccuracy, timeLimit: timeLimit);
+        _singleton.position = position;
+      } catch (e) {
+        print("Location aquisition error");
+        print(e);
+      }
+    });
+  }
+
+  static stopLocationObservation() {
+    print("TKLocation: stopping Userlocation Observation");
+    _singleton.timer?.cancel();
+    _singleton.timer = null;
+  }
+
+  static double get latitude {
+    assert(!_singleton.timerIsRunning, "TKLocation Userlocation observation has not started.");
+    assert(_singleton.position != null, "Position has not been aquired correctly.");
+    return _singleton.position!.latitude;
+  }
+
+  static double get longitue {
+    assert(!_singleton.timerIsRunning, "TKLocation Userlocation observation has not started.");
+    assert(_singleton.position != null, "Position has not been aquired correctly.");
+    return _singleton.position!.longitude;
   }
 
   static bool get serviceEnabled {

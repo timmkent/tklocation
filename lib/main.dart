@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:tklocation/tklocation.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  TKLocation.initialize(appShort: 'loeschmich');
   runApp(const MyApp());
 }
 
