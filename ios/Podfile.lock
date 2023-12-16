@@ -39,6 +39,8 @@ PODS:
     - leveldb-library (~> 1.22)
   - FirebaseSharedSwift (10.18.0)
   - Flutter (1.0.0)
+  - geocoding_ios (1.0.5):
+    - Flutter
   - geolocator_apple (1.2.0):
     - Flutter
   - GoogleUtilities/AppDelegateSwizzler (7.12.0):
@@ -69,6 +71,7 @@ DEPENDENCIES:
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
   - firebase_database (from `.symlinks/plugins/firebase_database/ios`)
   - Flutter (from `Flutter`)
+  - geocoding_ios (from `.symlinks/plugins/geocoding_ios/ios`)
   - geolocator_apple (from `.symlinks/plugins/geolocator_apple/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
 
@@ -96,6 +99,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/firebase_database/ios"
   Flutter:
     :path: Flutter
+  geocoding_ios:
+    :path: ".symlinks/plugins/geocoding_ios/ios"
   geolocator_apple:
     :path: ".symlinks/plugins/geolocator_apple/ios"
   shared_preferences_foundation:
@@ -113,6 +118,7 @@ SPEC CHECKSUMS:
   FirebaseDatabase: ac770bf7525ff0340b105166037036c0e46c2c7e
   FirebaseSharedSwift: 62e248642c0582324d0390706cadd314687c116b
   Flutter: f04841e97a9d0b0a8025694d0796dd46242b2854
+  geocoding_ios: a389ea40f6f548de6e63006a2e31bf66ff80769a
   geolocator_apple: cc556e6844d508c95df1e87e3ea6fa4e58c50401
   GoogleUtilities: 0759d1a57ebb953965c2dfe0ba4c82e95ccc2e34
   GTMSessionFetcher: e8647203b65cee28c5f73d0f473d096653945e72

@@ -1,10 +1,15 @@
-import 'dart:async';
+// ignore_for_file: avoid_print
 
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:tklocation/src/counter.dart';
-
+import 'package:tklocation/src/date.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:tklogger/tklogger.dart';
 // Use Case 1:
 
 // Location Service is enabled
@@ -17,88 +22,115 @@ class TKLocation {
   factory TKLocation() {
     return _singleton;
   }
+
+  String _lastResult = "ERROR:Service not started up";
+  String _city = "N/A";
+  String _country = "N/A";
+
   SharedPreferences? shared;
   bool? _serviceEnabled;
-// COOOL: Ich kann auf Counter zu greifen!!
+  bool _debugMode = false;
 
-  static initialize({required String appShort}) async {
-    // starte Timer
-    startLocationObservation();
-    final shared = await SharedPreferences.getInstance();
-    print("TKLocation initialized!");
-    // nur beim restart haben wir eine UID, sonst nicht. Wir muessen diese also immer wieder erneut pruefen.
+  static enableDebugMode(bool debugOnOff) {
+    _singleton._debugMode = debugOnOff;
+  }
 
-    // Zum testen erstaml rausnehmen
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    print("Current User:$uid");
+  static getLastResult() {
+    return _singleton._lastResult;
+  }
 
-    // Check if location service is available
-    final GeolocatorPlatform _geolocatorPlatform = GeolocatorPlatform.instance;
-    _singleton._serviceEnabled = await _geolocatorPlatform.isLocationServiceEnabled();
-    Counter.increaseCounterOnce(CounterName.location_service_enabled, appShort);
+  static getCity() {
+    return _singleton._city;
+  }
 
-    final permissions = await _geolocatorPlatform.checkPermission();
+  static getCountry() {
+    return _singleton._country;
+  }
 
-    if (permissions == LocationPermission.denied) {
-      // User has not yet granted permissions.
+// TODO: Log how long it took to get the location
+
+  String? tkuuid;
+
+  static initialize({required String appShort, required String? tkuuid, required String appVersion}) async {
+    Logger.initialize(appName: appShort, apiKey: "3202151", version: appVersion, tkuuid: tkuuid ?? "unknown");
+    _singleton.tkuuid = tkuuid;
+    getUserLocation();
+    _singleton.timer = Timer.periodic(const Duration(seconds: 20), (timer) {
+      getUserLocation();
+    });
+  }
+
+  static String? _getCurrentUserId() {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        log("We have an authenticated user $uid.");
+        return uid;
+      } else {
+        log("No user authenticated.");
+        return null;
+      }
+    } catch (e) {
+      _singleton._lastResult = "ERROR: Firebase not initialized";
+      return null;
     }
-//   _determinePosition()
-// COUNTER: location_aquired
   }
 
   Timer? timer;
   bool timerIsRunning = false;
-  Position? position;
+  TKCoordinates? position;
+
 // TODO: Get last known position from my own user profile
 // TODO: Get City
 // TODO: Write data to user profile.
 // TODO: Send some message to potential observers that want to reload
 
-  static Future<Position?> getUserLocation() async {
-    const timeLimit = Duration(seconds: 7);
-    const desiredAccuracy = LocationAccuracy.medium;
-    try {
-      return await Geolocator.getCurrentPosition(desiredAccuracy: desiredAccuracy, timeLimit: timeLimit);
-    } catch (e) {
-      print("Location aquisition error");
-      print(e);
-      return null;
-    }
-  }
-
-  static startLocationObservation() {
-    // TODO: Make sure you dont start this more than once!
-    print("TKLocation: starting Userlocation Observation");
-    _singleton.timer = Timer.periodic(const Duration(seconds: 10), (timer) async {
-      print("TKLocation: getting user location");
-      const timeLimit = Duration(seconds: 7);
-      const desiredAccuracy = LocationAccuracy.medium;
-      try {
-        final position = await Geolocator.getCurrentPosition(desiredAccuracy: desiredAccuracy, timeLimit: timeLimit);
-        _singleton.position = position;
-      } catch (e) {
-        print("Location aquisition error");
-        print(e);
+  static Future<TKCoordinates?> getUserLocation() async {
+    // How can we internally update the position but externally rapidly return something...?
+    var position = await _determinePosition();
+    final uid = _getCurrentUserId();
+    if (position == null) {
+      if (uid != null) {
+        log("Trying to get fallback Location");
+        position = await _tryToGetFallBackLocation(uid);
+        if (position != null) {
+          log("OK. But using fallback location.");
+          return position;
+        } else {
+          log("INFO: Could retrieve fallback location");
+          return null;
+        }
+      } else {
+        log("Giving up. No fallback possible.");
       }
-    });
-  }
-
-  static stopLocationObservation() {
-    print("TKLocation: stopping Userlocation Observation");
-    _singleton.timer?.cancel();
-    _singleton.timer = null;
+    } else {
+      log("OK. fresh location received.");
+      if (uid != null) {
+        log("We also have a user authenticated so we will save the position.");
+        _savePositionTo(position, uid);
+        log("Trying to get the city & country");
+        final cityCountry = await _tryToGetCityAndCountry(position);
+        if (cityCountry != null) {
+          log("City & Country received. We are now saving it to the user object as well.");
+          _saveCountryCityTo(cityCountry, uid);
+        }
+      } else {
+        log("No user authenticated. So we cannot save information to database.");
+      }
+      return position;
+    }
   }
 
   static double get latitude {
     assert(!_singleton.timerIsRunning, "TKLocation Userlocation observation has not started.");
     assert(_singleton.position != null, "Position has not been aquired correctly.");
-    return _singleton.position!.latitude;
+    return _singleton.position!.lat;
   }
 
   static double get longitue {
     assert(!_singleton.timerIsRunning, "TKLocation Userlocation observation has not started.");
     assert(_singleton.position != null, "Position has not been aquired correctly.");
-    return _singleton.position!.longitude;
+    return _singleton.position!.lon;
   }
 
   static bool get serviceEnabled {
@@ -106,7 +138,32 @@ class TKLocation {
     return _singleton._serviceEnabled!;
   }
 
-  Future<Position> _determinePosition() async {
+  static Future<TKCoordinates?> _tryToGetFallBackLocation(String uid) async {
+    try {
+      final snap = await FirebaseDatabase.instance.ref('users').child(uid).get();
+      final map = snap.value as Map<Object?, Object?>?;
+      if (map == null) {
+        print("No user object in database");
+        return null;
+      }
+      final lat = map['lat'] as double?;
+      final lon = map['lon'] as double?;
+      if (lat == null || lon == null) {
+        log("User object ok, but lat/lon not set.");
+        return null;
+      }
+
+      return TKCoordinates(lat: lat, lon: lon);
+    } catch (e) {
+      log(e.toString());
+      log("Network error - Firebase could not access User Object");
+      return null;
+    }
+  }
+
+// we return different results
+  static Future<TKCoordinates?> _determinePosition() async {
+    log("Determining position...");
     bool serviceEnabled;
     LocationPermission permission;
 
@@ -116,114 +173,81 @@ class TKLocation {
       // Location services are not enabled don't continue
       // accessing the position and request users of the
       // App to enable the location services.
+      _singleton._lastResult = "Error: Location services are disabled.";
       return Future.error('Location services are disabled.');
     }
+    log("Service is enabled");
+    try {
+      const timeLimit = Duration(seconds: 7);
+      const desiredAccuracy = LocationAccuracy.medium;
+      log("Awating Geolocator Result...");
+      final startTime = DateTime.now().millisecondsSinceEpoch;
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: desiredAccuracy, timeLimit: timeLimit);
+      final endTime = DateTime.now().millisecondsSinceEpoch;
+      final difference = endTime - startTime;
+      log("Geolocator result was: ${position.latitude} received in $difference milliseconds.");
+      _singleton._lastResult = "Position successfully received in $difference milliseconds.";
+      return TKCoordinates(lat: position.latitude, lon: position.longitude);
+      // try to get city
+    } catch (e) {
+      log(e.toString());
+      _singleton._lastResult = e.toString();
+      return null;
+    }
+  }
 
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        // Permissions are denied, next time you could try
-        // requesting permissions again (this is also where
-        // Android's shouldShowRequestPermissionRationale
-        // returned true. According to Android guidelines
-        // your App should show an explanatory UI now.
-        return Future.error('Location permissions are denied');
+  static Future<CityCountry?> _tryToGetCityAndCountry(TKCoordinates position) async {
+    final startTime = DateTime.now().millisecondsSinceEpoch;
+    try {
+      final placemarks = await GeocodingPlatform.instance.placemarkFromCoordinates(position.lat, position.lon);
+      if (placemarks.isNotEmpty) {
+        final locality = placemarks.first.locality;
+        final countryCode = placemarks.first.isoCountryCode;
+        if (locality != null && countryCode != null) {
+          final entTime = DateTime.now().millisecondsSinceEpoch;
+          final millisPassed = entTime - startTime;
+          log('📍 City: $locality, Country: $countryCode');
+          return CityCountry(city: locality, country: countryCode, timepassed: millisPassed);
+        } else {
+          return null;
+        }
+// TODO: Logging
+// hier sehe ich, ich wuerde das schon sehr gerne im logger haben. Also bitte: Diese App soll in den Logger schreiben.
+// Dafuer brauchen wir die TKUUID
+        // Logger.info('📍 City: $city, Country: $country');
+      } else {
+        return null;
       }
+    } catch (e) {
+      debugPrint(e.toString());
+      return null;
     }
+  }
 
-    if (permission == LocationPermission.deniedForever) {
-      // Permissions are denied forever, handle appropriately.
-      return Future.error('Location permissions are permanently denied, we cannot request permissions.');
-    }
+  static Future<void> _saveCountryCityTo(CityCountry cityCountry, String uid) {
+    return FirebaseDatabase.instance.ref('users').child(uid).update({'city': cityCountry.city, 'country': cityCountry.country});
+  }
 
-    // When we reach here, permissions are granted and we can
-    // continue accessing the position of the device.
-    return await Geolocator.getCurrentPosition();
+  static Future<void> _savePositionTo(TKCoordinates position, String uid) {
+    return FirebaseDatabase.instance.ref('users').child(uid).update({'lat': position.lat, 'lon': position.lon});
+  }
+
+  static log(String rawMessage) {
+    // debugPrint("[TKLocation] $rawMessage");
+    Logger.info("[TKLocation] $rawMessage");
   }
 }
 
-/*
-// const geoPointSF = GeoPoint(37.76924, -122.41906);
-// const geoPointLA = GeoPoint(34.07238228752573, -118.29917759003277);
-// const geoPointMountainView = GeoPoint(37.39967066210587, -122.08504684853969);
-
-final userLocationRepositoryProvider = Provider((ref) => UserLocationRepository(
-      FirebaseDatabase.instance,
-      FirebaseAuth.instance,
-    ));
-
-StreamSubscription<Position>? positionStream;
-
-@Deprecated('dont use this anymore')
-class UserLocationRepository {
-  final FirebaseAuth firebaseAuth;
-  final FirebaseDatabase firebaseDatabase;
-  UserLocationRepository(this.firebaseDatabase, this.firebaseAuth);
-// TODO: Why do we have Queue Overflows?
-// TODO: All Logs: Search
-// TODO: Jump from Main Log to TKUUID Specific log
-// TODO: Status bar in white on MainFrame People!
-  observeUserLocation() async {
-    return;
-    final uid = firebaseAuth.currentUser!.uid;
-    FirebaseCrashlytics.instance.setUserIdentifier(uid);
-    FirebaseAnalytics.instance.setUserId(id: uid);
-    firebaseDatabase.ref('users').child(uid).update({'lat': defaultLat, 'lon': defaultLon});
-    final locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.medium,
-      distanceFilter: kMinimumDistanceInMeterChangeToTriggerLocationUpdate,
-    );
-
-    final permissionStatus = await Geolocator.checkPermission();
-    if (permissionStatus == LocationPermission.denied) {
-      try {
-        await Geolocator.requestPermission();
-      } catch (e) {
-        debugPrint('we can ignore this.');
-      }
-    }
-    if (permissionStatus == LocationPermission.whileInUse || permissionStatus == LocationPermission.always) {
-      try {
-        positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((event) async {
-          Logger.info('(UserLocationDataSourceImpl.dart) Real User Location update received');
-
-          // How to set location to GeoLoc???? Have we EVER done this in Flutter? OF COURSE!!!!!
-          if (firebaseAuth.currentUser == null) return; // this is to prevent further updates after user has logged out or deleted profile.
-          firebaseDatabase.ref('users').child(uid).update({'lat': event.latitude, 'lon': event.longitude});
-
-          final geopoint = GeoPoint(event.latitude, event.longitude);
-          final geohash = MyGeoHash().geoHashForLocation(geopoint); // 9q8yywd7v
-
-          // Vermutung: How to save this into the database:
-          firebaseDatabase.ref(geolocpath).child(uid).update({
-            'g': geohash,
-            'l': [event.latitude, event.longitude]
-          });
-// testSF@madetk.com
-// flutter: [DEBUG] 2.5.34 📍 GeoHash set for TLHWyX3Z1CeA1h9L011z2uQsVN83, hash: 9q8yywdq7v, lat: 37.785834
-// flutter: [DEBUG] 2.5.34 📍 City: San Francisco
-          Logger.info('📍 GeoHash set for $uid, hash: $geohash, lat: ${event.latitude}');
-          localPosition = GeoPoint(event.latitude, event.longitude);
-          // this can throw if we have network problems.
-          try {
-            final placemarks = await GeocodingPlatform.instance.placemarkFromCoordinates(event.latitude, event.longitude);
-            if (placemarks.isNotEmpty) {
-              final city = placemarks.first.locality;
-              final country = placemarks.first.isoCountryCode;
-
-              Logger.info('📍 City: $city, Country: $country');
-
-              firebaseDatabase.ref('users').child(uid).update({'city': city, 'country': country});
-            }
-          } catch (e) {
-            debugPrint(e.toString());
-          }
-        });
-      } catch (e) {
-        debugPrint(e.toString());
-      }
-    }
-  }
+class CityCountry {
+  final String city;
+  final String country;
+  final int timepassed;
+  CityCountry({required this.city, required this.country, required this.timepassed});
 }
-*/
+
+class TKCoordinates {
+  final double lat;
+  final double lon;
+
+  TKCoordinates({required this.lat, required this.lon});
+}
