@@ -19,8 +19,11 @@ class TKLocation {
   }
   SharedPreferences? shared;
   bool? _serviceEnabled;
+// COOOL: Ich kann auf Counter zu greifen!!
 
   static initialize({required String appShort}) async {
+    // starte Timer
+    startLocationObservation();
     final shared = await SharedPreferences.getInstance();
     print("TKLocation initialized!");
     // nur beim restart haben wir eine UID, sonst nicht. Wir muessen diese also immer wieder erneut pruefen.
@@ -139,3 +142,88 @@ class TKLocation {
     return await Geolocator.getCurrentPosition();
   }
 }
+
+/*
+// const geoPointSF = GeoPoint(37.76924, -122.41906);
+// const geoPointLA = GeoPoint(34.07238228752573, -118.29917759003277);
+// const geoPointMountainView = GeoPoint(37.39967066210587, -122.08504684853969);
+
+final userLocationRepositoryProvider = Provider((ref) => UserLocationRepository(
+      FirebaseDatabase.instance,
+      FirebaseAuth.instance,
+    ));
+
+StreamSubscription<Position>? positionStream;
+
+@Deprecated('dont use this anymore')
+class UserLocationRepository {
+  final FirebaseAuth firebaseAuth;
+  final FirebaseDatabase firebaseDatabase;
+  UserLocationRepository(this.firebaseDatabase, this.firebaseAuth);
+// TODO: Why do we have Queue Overflows?
+// TODO: All Logs: Search
+// TODO: Jump from Main Log to TKUUID Specific log
+// TODO: Status bar in white on MainFrame People!
+  observeUserLocation() async {
+    return;
+    final uid = firebaseAuth.currentUser!.uid;
+    FirebaseCrashlytics.instance.setUserIdentifier(uid);
+    FirebaseAnalytics.instance.setUserId(id: uid);
+    firebaseDatabase.ref('users').child(uid).update({'lat': defaultLat, 'lon': defaultLon});
+    final locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.medium,
+      distanceFilter: kMinimumDistanceInMeterChangeToTriggerLocationUpdate,
+    );
+
+    final permissionStatus = await Geolocator.checkPermission();
+    if (permissionStatus == LocationPermission.denied) {
+      try {
+        await Geolocator.requestPermission();
+      } catch (e) {
+        debugPrint('we can ignore this.');
+      }
+    }
+    if (permissionStatus == LocationPermission.whileInUse || permissionStatus == LocationPermission.always) {
+      try {
+        positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((event) async {
+          Logger.info('(UserLocationDataSourceImpl.dart) Real User Location update received');
+
+          // How to set location to GeoLoc???? Have we EVER done this in Flutter? OF COURSE!!!!!
+          if (firebaseAuth.currentUser == null) return; // this is to prevent further updates after user has logged out or deleted profile.
+          firebaseDatabase.ref('users').child(uid).update({'lat': event.latitude, 'lon': event.longitude});
+
+          final geopoint = GeoPoint(event.latitude, event.longitude);
+          final geohash = MyGeoHash().geoHashForLocation(geopoint); // 9q8yywd7v
+
+          // Vermutung: How to save this into the database:
+          firebaseDatabase.ref(geolocpath).child(uid).update({
+            'g': geohash,
+            'l': [event.latitude, event.longitude]
+          });
+// testSF@madetk.com
+// flutter: [DEBUG] 2.5.34 📍 GeoHash set for TLHWyX3Z1CeA1h9L011z2uQsVN83, hash: 9q8yywdq7v, lat: 37.785834
+// flutter: [DEBUG] 2.5.34 📍 City: San Francisco
+          Logger.info('📍 GeoHash set for $uid, hash: $geohash, lat: ${event.latitude}');
+          localPosition = GeoPoint(event.latitude, event.longitude);
+          // this can throw if we have network problems.
+          try {
+            final placemarks = await GeocodingPlatform.instance.placemarkFromCoordinates(event.latitude, event.longitude);
+            if (placemarks.isNotEmpty) {
+              final city = placemarks.first.locality;
+              final country = placemarks.first.isoCountryCode;
+
+              Logger.info('📍 City: $city, Country: $country');
+
+              firebaseDatabase.ref('users').child(uid).update({'city': city, 'country': country});
+            }
+          } catch (e) {
+            debugPrint(e.toString());
+          }
+        });
+      } catch (e) {
+        debugPrint(e.toString());
+      }
+    }
+  }
+}
+*/
