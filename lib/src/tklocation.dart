@@ -52,7 +52,7 @@ class TKLocation {
   String? tkuuid;
 
   static initialize({required String appShort, required String? tkuuid, required String appVersion}) async {
-    Logger.initialize(appName: appShort, apiKey: "3202151", version: appVersion, tkuuid: tkuuid ?? "unknown");
+    Logger.initialize(appName: appShort, apiKey: "3202151",  tkuuid: tkuuid ?? "unknown");
     _singleton.tkuuid = tkuuid;
     getUserLocation();
     _singleton.timer = Timer.periodic(const Duration(seconds: 20), (timer) {

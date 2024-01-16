@@ -328,6 +328,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.8.0"
+  package_info_plus:
+    dependency: transitive
+    description:
+      name: package_info_plus
+      sha256: "7e76fad405b3e4016cd39d08f455a4eb5199723cf594cd1b8916d47140d93017"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.2.0"
+  package_info_plus_platform_interface:
+    dependency: transitive
+    description:
+      name: package_info_plus_platform_interface
+      sha256: "9bc8ba46813a4cc42c66ab781470711781940780fd8beddd0c3da62506d3a6c6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.1"
   path:
     dependency: transitive
     description:
@@ -498,10 +514,10 @@ packages:
     description:
       path: "."
       ref: HEAD
-      resolved-ref: f0e8412b04277db191a08c5b7599808ff8187a04
+      resolved-ref: "376ab953fcc9c3f971ee756a5d299768bffbd57c"
       url: "https://github.com/timmkent/tklogger.git"
     source: git
-    version: "1.0.4+1"
+    version: "1.0.5+1"
   typed_data:
     dependency: transitive
     description:
